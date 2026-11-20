@@ -1,0 +1,6 @@
+build/
+build.local.bat
+*.log
+*.pdb
+dist/
+ti-test-output/

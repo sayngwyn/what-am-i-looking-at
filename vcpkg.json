@@ -1,0 +1,31 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "what-am-i-looking-at",
+  "version-string": "1.0.0",
+  "license": "GPL-3.0-or-later",
+  "dependencies": [
+    "directxmath",
+    "directxtk",
+    "fmt",
+    {
+      "name": "imgui",
+      "features": [ "dx11-binding", "win32-binding" ]
+    },
+    "rapidcsv",
+    "robin-hood-hashing",
+    "simpleini",
+    "spdlog",
+    "xbyak"
+  ],
+  "features": {
+    "fo4": {
+      "description": "Fallout 4 plugin: commonlibf4 logs through spdlog with wide-string support",
+      "dependencies": [
+        {
+          "name": "spdlog",
+          "features": [ "wchar" ]
+        }
+      ]
+    }
+  }
+}
