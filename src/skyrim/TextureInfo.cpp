@@ -142,7 +142,7 @@ namespace ti
 				std::vector<std::filesystem::path> found;
 				for (const auto& entry : std::filesystem::directory_iterator(DataDir())) {
 					std::error_code ec;
-					if (entry.is_regular_file(ec) && entry.path().extension() == L".bsa")
+					if (entry.is_regular_file(ec) && _wcsicmp(entry.path().extension().c_str(), L".bsa") == 0)  // any case: mods ship ".BSA" too
 						found.push_back(entry.path());
 				}
 				// The engine loads an archive when a loaded plugin owns it ("<plugin>.bsa", "<plugin> - <anything>.bsa"); archives of

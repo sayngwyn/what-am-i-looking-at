@@ -50,6 +50,14 @@ namespace ti
 		std::string rootMaterial;    ///< the root material path when it differs from materialPath
 		FileOrigin  materialOrigin;  ///< which archive (or loose file) the material file comes from
 
+		// Fallout 4: the mesh file this part comes from, worked out for objects that carry object modifications (weapons, some armor)
+		// by finding the part's name in the header of the base model and of each modification's model. Empty when not worked out.
+		std::string              sourceMesh;     ///< Data-relative path of the one mesh file whose header names this part
+		FileOrigin               sourceOrigin;   ///< where that file lives (loose, mod folder, archive)
+		std::string              sourceOwner;    ///< the item or modification that brings the file: "Name (Plugin.esm)"
+		bool                     sourceIsMod = false;  ///< sourceOwner is an object modification, not the item's own model
+		std::vector<std::string> sourceChoices;  ///< when several files name a part of this name: all of them (sourceMesh is then empty)
+
 		// alpha (NiAlphaProperty)
 		std::string alphaMode = "none";  ///< none, blend, test, blend+test
 		int         alphaThreshold = -1; ///< 0..255 when testing
@@ -155,7 +163,6 @@ namespace ti
 		WaterSection            water;    ///< kind "water"
 		SkySection              sky;      ///< kind "sky"
 		std::vector<Diagnostic> diagnostics;  ///< every part's warnings together, "part: text"
-
 		// every hit along the ray, nearest first (parts of objects, terrain, water), for stepping through
 		std::vector<HitInfo> hits;
 		int                  hitIndex = -1;  ///< which entry of hits this report is about

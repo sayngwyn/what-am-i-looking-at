@@ -114,6 +114,7 @@ namespace ti
 			if (type == kGeneral) {
 				if (pos + kGeneralRecord > records.size())
 					return std::nullopt;
+				e.dataOffset = Get<std::uint64_t>(records.data(), pos + 16);
 				e.packedSize = Get<std::uint32_t>(records.data(), pos + 24);
 				e.unpackedSize = Get<std::uint32_t>(records.data(), pos + 28);
 				e.chunks = 1;
@@ -302,6 +303,35 @@ namespace ti
 		Put32(out, 0);
 		out.insert(out.end(), data.begin(), data.end());
 		return out;
+	}
+
+	std::vector<std::uint8_t> Ba2Index::ReadFile(const Ba2Entry& a_entry, std::size_t a_maxBytes, std::string* a_why) const
+	{
+		const auto fail = [&](const char* a_text) {
+			if (a_why)
+				*a_why = a_text;
+			return std::vector<std::uint8_t>();
+		};
+		if (kind_ != Kind::kGeneral)
+			return fail("not a general archive");
+		if (a_entry.unpackedSize == 0 || a_entry.unpackedSize > a_maxBytes)
+			return fail("the file is empty or larger than the limit");
+		std::ifstream in(path_, std::ios::binary);
+		if (!in)
+			return fail("the archive cannot be opened");
+		const std::size_t         stored = static_cast<std::size_t>(a_entry.packedSize ? a_entry.packedSize : a_entry.unpackedSize);
+		std::vector<std::uint8_t> raw(stored);
+		in.seekg(static_cast<std::streamoff>(a_entry.dataOffset), std::ios::beg);
+		in.read(reinterpret_cast<char*>(raw.data()), static_cast<std::streamsize>(raw.size()));
+		if (!in)
+			return fail("the archive ends inside the file");
+		if (a_entry.packedSize) {
+			std::vector<std::uint8_t> unpacked;
+			if (!ZlibInflate(raw.data(), raw.size(), static_cast<std::size_t>(a_entry.unpackedSize), unpacked))
+				return fail("the file does not unpack");
+			return unpacked;
+		}
+		return raw;
 	}
 
 	const Ba2Entry* Ba2Index::Find(std::string_view a_path) const

@@ -29,7 +29,7 @@
 
 namespace
 {
-	constexpr auto kPluginName = "What Am I Looking At 1.0.0"sv;
+	constexpr auto kPluginName = "What Am I Looking At 1.1.0"sv;
 
 	ti::Config    g_config;
 	std::uint64_t g_counter = 0;
@@ -693,7 +693,7 @@ namespace
 // F4SE 0.7.x (NG and AE) reads this table; address library and structure bits say which runtimes the plugin is built for.
 F4SE_PLUGIN_VERSION = []() noexcept {
 	F4SE::PluginVersionData v{};
-	v.PluginVersion({ 1, 0, 0, 0 });
+	v.PluginVersion({ 1, 1, 0, 0 });
 	v.PluginName("WhatAmILookingAt");
 	v.AuthorName("sayngwyn");
 	v.UsesAddressLibraryNG(true);

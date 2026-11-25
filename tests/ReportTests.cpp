@@ -410,6 +410,9 @@ static void TestHelpers()
 	CHECK(Fo4BodySlotName(30) == "hair top");
 	CHECK(Fo4BodySlotName(41) == "torso (armor)");
 	CHECK(Fo4BodySlotName(60) == "Pip-Boy");
+	CHECK(Fo4BodySlotName(62) == "weapon in hand");
+	CHECK(Fo4BodySlotName(71) == "holstered gun");
+	CHECK(Fo4BodySlotName(74) == "slot 74");
 	CHECK(Fo4BodySlotName(99) == "slot 99");
 	{
 		WornItem w;
@@ -490,6 +493,9 @@ static void TestArchive()
 	CHECK(ArchiveBelongsToPlugin("Update.bsa", "Update.esm"));
 	CHECK(ArchiveBelongsToPlugin("My Mod - Textures.bsa", "my mod.esp"));
 	CHECK(!ArchiveBelongsToPlugin("My Mod 2.bsa", "My Mod.esp"));
+	CHECK(ArchiveBelongsToPlugin("My Mod - Textures.BSA", "My Mod.esp"));  // mods ship ".BSA" too
+	CHECK(ArchiveBelongsToPlugin("SKYRIM - Meshes0.BSA", "Skyrim.esm"));
+	CHECK(!ArchiveBelongsToPlugin("My Mod - Textures.BA2", "My Mod.esp"));  // not a BSA, whatever the case
 	CHECK(!ArchiveBelongsToPlugin("My Mod.ba2", "My Mod.esp"));
 
 	const auto dir = std::filesystem::temp_directory_path() / "lookingat_report_tests";

@@ -122,6 +122,24 @@ namespace ti
 		return a_origin.source.empty() ? std::string() : a_origin.source;
 	}
 
+	std::vector<Fact> PartSourceFacts(const ShapeInfo& a_shape)
+	{
+		std::vector<Fact> out;
+		if (!a_shape.sourceMesh.empty()) {
+			out.push_back({ "Part file", DisplayPath(a_shape.sourceMesh) });
+			if (const std::string origin = OriginLabel(a_shape.sourceOrigin); !origin.empty())
+				out.push_back({ "Part file from", origin });
+			if (!a_shape.sourceOwner.empty())
+				out.push_back({ a_shape.sourceIsMod ? "Added by mod" : "Part of", a_shape.sourceOwner });
+		} else if (!a_shape.sourceChoices.empty()) {
+			std::string text = "one of";
+			for (std::size_t i = 0; i < a_shape.sourceChoices.size(); ++i)
+				text += (i ? ", " : " ") + DisplayPath(a_shape.sourceChoices[i]);
+			out.push_back({ "Part file", text });
+		}
+		return out;
+	}
+
 	std::string StepLabel(int a_index, int a_count)
 	{
 		if (a_index > 0)

@@ -6,8 +6,12 @@
 
 #include "Diagnostics.h"
 #include "Inspector.h"
+#include "NifStrings.h"
+#include "PartSource.h"
 #include "TextureInfo.h"
 #include "WorldFill.h"
+
+#include <unordered_map>
 
 namespace ti
 {
@@ -54,6 +58,21 @@ namespace ti
 			if (auto* file = a_form->GetFile(0))
 				return std::string(file->GetFilename());
 			return {};
+		}
+
+		/**
+		 * The plugin that defines a form, plus the last plugin that changes it when that is another one ("Fallout4.esm, changed by
+		 * Mod.esp"): a mod that overrides a vanilla modification and points it at its own mesh is the one that brings that mesh.
+		 */
+		std::string PluginTextOf(RE::TESForm* a_form)
+		{
+			std::string plugin = PluginOf(a_form);
+			if (plugin.empty())
+				return plugin;
+			const auto chain = ChainOf(a_form);
+			if (chain.size() > 1 && chain.back() != plugin)
+				plugin += ", changed by " + chain.back();
+			return plugin;
 		}
 
 		void AddFact(PickInfo& a_info, std::string a_label, std::string a_value) { a_info.facts.push_back({ std::move(a_label), std::move(a_value) }); }
@@ -333,21 +352,154 @@ namespace ti
 
 		const char* const kTextureSetLabels[8] = { "diffuse", "normal", "glow", "height", "environment", "reflectivity/specular", "wrinkles", "multilayer" };
 
-		/** The object modifications on a worn item (an armor piece's mods): "name (form id)". Empty when the piece has none or they cannot be read. */
-		std::vector<std::string> ModsOf(const RE::BIPOBJECT& a_object)
+		/** The object modifications (OMODs) an instance carries, as forms. Empty when it has none or they cannot be read. */
+		std::vector<RE::TESForm*> OmodsOf(const RE::BGSObjectInstanceExtra* a_extra)
 		{
-			std::vector<std::string> mods;
+			std::vector<RE::TESForm*> mods;
 			try {
-				if (!a_object.modExtra || !a_object.modExtra->values)
+				if (!a_extra || !a_extra->values)
 					return mods;
-				for (const auto& entry : a_object.modExtra->GetIndexData()) {
+				for (const auto& entry : a_extra->GetIndexData()) {
 					if (entry.disabled || !entry.objectID)
 						continue;
-					mods.push_back(DescribeForm(RE::TESForm::GetFormByID(entry.objectID)));
+					if (auto* form = RE::TESForm::GetFormByID(entry.objectID))
+						mods.push_back(form);
 				}
 			} catch (...) {
 			}
 			return mods;
+		}
+
+		/** "Name (EDID, 0012AB34) from Plugin.esm": one object modification as the card lists it. */
+		std::string ModText(RE::TESForm* a_mod)
+		{
+			std::string text = DescribeForm(a_mod);
+			if (const std::string plugin = PluginTextOf(a_mod); !plugin.empty())
+				text += " from " + plugin;
+			return text;
+		}
+
+		std::vector<std::string> ModTexts(const std::vector<RE::TESForm*>& a_mods)
+		{
+			std::vector<std::string> texts;
+			for (auto* mod : a_mods) {
+				std::string text = ModText(mod);
+				// Bethesda's include/filter helpers ("(unnamed)", "***INCLUDE a Standard Sight***") are not parts a player sees: leave them off the card
+				if (text.starts_with("(unnamed)") || text.starts_with("***"))
+					continue;
+				texts.push_back(std::move(text));
+			}
+			return texts;
+		}
+
+		// ---- which mesh file each part comes from ------------------------------------------------------------------------
+
+		/** A mesh that may have contributed parts to the picked object, and who brings it. */
+		struct MeshCandidate
+		{
+			std::string path;   ///< as the form's model names it (relative to Meshes)
+			std::string owner;  ///< "Name (Plugin.esm)"
+			bool        isMod = false;
+		};
+
+		/** "Name (Plugin.esm)": what the card says brings a mesh. A nameless form falls back on its editor ID, then its form ID. */
+		std::string OwnerText(RE::TESForm* a_form)
+		{
+			std::string name = NameOf(a_form);
+			if (name.empty())
+				name = Safe(a_form->GetFormEditorID());
+			if (name.empty())
+				name = Hex8(a_form->GetFormID());
+			const std::string plugin = PluginTextOf(a_form);
+			return plugin.empty() ? name : name + " (" + plugin + ")";
+		}
+
+		/** The model path a form's model component holds; empty when it has none. */
+		std::string ModelPathOf(const RE::TESModel* a_model)
+		{
+			try {
+				return a_model ? Safe(a_model->GetModel()) : std::string();
+			} catch (...) {
+				return {};
+			}
+		}
+
+		/**
+		 * Adds an item's own model and the model of each of its modifications as candidates. Items without modifications add nothing:
+		 * only a built-up object (a weapon, a modded armor piece) has parts whose file the card cannot take from the one model.
+		 */
+		void AddItemCandidates(std::vector<MeshCandidate>& a_out, RE::TESForm* a_item, const std::string& a_itemModel, const std::vector<RE::TESForm*>& a_mods)
+		{
+			bool any = false;
+			for (auto* mod : a_mods) {
+				if (mod->GetFormType() != RE::ENUM_FORM_ID::kOMOD)
+					continue;
+				const std::string model = ModelPathOf(static_cast<RE::BGSMod::Attachment::Mod*>(mod));
+				if (model.empty())
+					continue;
+				if (!any && a_item && !a_itemModel.empty())
+					a_out.push_back({ a_itemModel, OwnerText(a_item), false });
+				any = true;
+				a_out.push_back({ model, OwnerText(mod), true });
+			}
+		}
+
+		/** The object modifications on a worn item (an armor piece's or a weapon's mods): "name (form id) from plugin". Empty when it has none or they cannot be read. */
+		std::vector<std::string> ModsOf(const RE::BIPOBJECT& a_object) { return ModTexts(OmodsOf(a_object.modExtra)); }
+
+		std::string MeshPathOf(const std::string& a_modelPath)
+		{
+			const std::string lower = Lower(a_modelPath);
+			return lower.rfind("meshes", 0) == 0 ? a_modelPath : "meshes\\" + a_modelPath;
+		}
+
+		/**
+		 * Works out which candidate file each part is from, by reading the names in each file's header. When any candidate cannot be read
+		 * (the archives are still being indexed, a file is missing) nothing is claimed: a part's name might be in the file that could
+		 * not be read.
+		 */
+		void ResolvePartSources(PickInfo& a_info, const std::vector<MeshCandidate>& a_candidates)
+		{
+			if (a_candidates.empty() || a_info.shapes.empty())
+				return;
+			static std::unordered_map<std::string, std::vector<std::string>> cache;  // lower-case path -> the header's names
+			std::vector<MeshSource>                                          sources;
+			for (const auto& c : a_candidates) {
+				const std::string path = MeshPathOf(c.path);
+				const std::string key = Lower(path);
+				auto              known = cache.find(key);
+				if (known == cache.end()) {
+					std::string              why;
+					bool                     pending = false;
+					std::vector<std::string> names;
+					const auto               bytes = ReadDataFile(path, 16u * 1024u * 1024u, &why, &pending);
+					if (bytes.empty()) {
+						spdlog::info("part source: {} {}: {}", pending ? "not read yet" : "cannot read", path, why);
+						return;
+					}
+					if (!NifHeaderStrings(bytes.data(), bytes.size(), names)) {
+						spdlog::info("part source: {} is not a mesh header this reads", path);
+						return;
+					}
+					if (cache.size() > 512)
+						cache.clear();
+					known = cache.emplace(key, std::move(names)).first;
+				}
+				MeshSource s;
+				s.path = path;
+				s.owner = c.owner;
+				s.isMod = c.isMod;
+				s.origin = ResolveOrigin(path);
+				SetMeshNames(s, known->second);
+				sources.push_back(std::move(s));
+			}
+			AttributeParts(a_info.shapes, sources);
+			int found = 0, several = 0;
+			for (const auto& shape : a_info.shapes) {
+				found += shape.sourceMesh.empty() ? 0 : 1;
+				several += shape.sourceChoices.empty() ? 0 : 1;
+			}
+			spdlog::info("part source: {} candidate file(s), {} of {} part(s) placed, {} named in several files", sources.size(), found, a_info.shapes.size(), several);
 		}
 
 		/** One worn item (or the skin) as the biped holds it. */
@@ -412,18 +564,21 @@ namespace ti
 			a_list.push_back(std::move(a_item));
 		}
 
-		void FillWorn(NpcSection& a_npc, RE::Actor* a_actor, const RE::TESForm* a_skin)
+		void FillWorn(NpcSection& a_npc, RE::Actor* a_actor, const RE::TESForm* a_skin, std::vector<MeshCandidate>& a_candidates)
 		{
 			if (!a_actor->biped)
 				return;
 			const auto& biped = a_actor->biped;
-			const auto  count = static_cast<std::uint32_t>(RE::BIPED_OBJECT::kEditorTotal);
+			// the worn slots and, after them, the weapon slots (a weapon in hand or holstered is built from its own model and its modifications' models)
+			const auto count = static_cast<std::uint32_t>(RE::BIPED_OBJECT::kTotal);
 			for (std::uint32_t i = 0; i < count; ++i) {
 				const auto& object = biped->object[i];
 				if (!object.parent.object)
 					continue;
 				const bool isSkin = a_skin && object.parent.object == a_skin;
 				WornItem   w = MakeWornItem(object, 30 + static_cast<int>(i));
+				if (!isSkin)
+					AddItemCandidates(a_candidates, object.parent.object, ModelPathOf(object.part), OmodsOf(object.modExtra));
 				AddOrMerge(isSkin ? a_npc.skinItem.parts : a_npc.worn, std::move(w));
 			}
 		}
@@ -539,7 +694,7 @@ namespace ti
 			}
 		}
 
-		void FillNpc(PickInfo& a_info, RE::Actor* a_actor, RE::TESNPC* a_npc)
+		void FillNpc(PickInfo& a_info, RE::Actor* a_actor, RE::TESNPC* a_npc, std::vector<MeshCandidate>& a_candidates)
 		{
 			auto& n = a_info.npc;
 			n.present = true;
@@ -563,7 +718,7 @@ namespace ti
 			}
 			n.skinToneColor = HexColor(static_cast<std::uint8_t>(a_npc->bodyTintColorR), static_cast<std::uint8_t>(a_npc->bodyTintColorG), static_cast<std::uint8_t>(a_npc->bodyTintColorB));
 			FillHeadParts(n, a_npc);
-			FillWorn(n, a_actor, skin);
+			FillWorn(n, a_actor, skin, a_candidates);
 			FillFaceGen(n, a_npc);
 		}
 
@@ -671,10 +826,24 @@ namespace ti
 			auto* base = a_ref->GetObjectReference();
 			FillIdentity(a_info, a_ref, base);
 			FillFacts(a_info, a_ref, base);
+			std::vector<MeshCandidate> candidates;
 			if (a_ref->IsActor()) {
 				auto* actor = static_cast<RE::Actor*>(a_ref);
 				if (auto* npc = actor->GetNPC())
-					FillNpc(a_info, actor, npc);
+					FillNpc(a_info, actor, npc, candidates);
+			} else if (a_ref->extraList) {
+				// an item lying in the world (a weapon on the ground) keeps its modifications in the reference's extra data
+				const auto omods = OmodsOf(a_ref->extraList->GetByType<RE::BGSObjectInstanceExtra>());
+				for (const auto& text : ModTexts(omods))
+					AddFact(a_info, "Mod", text);
+				AddItemCandidates(candidates, base, a_info.object.model, omods);
+			}
+			try {
+				ResolvePartSources(a_info, candidates);
+			} catch (const std::exception& e) {
+				spdlog::error("part source failed for {:08X}: {}", a_ref->GetFormID(), e.what());
+			} catch (...) {
+				spdlog::error("part source failed for {:08X}: unknown exception", a_ref->GetFormID());
 			}
 			ResolveOrigins(a_info);
 			FillBodyAreaFromWorn(a_info);

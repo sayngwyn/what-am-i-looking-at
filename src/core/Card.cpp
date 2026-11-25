@@ -278,10 +278,10 @@ namespace ti::card
 				DL()->AddRectFilled(ImVec2(x, y), ImVec2(x + t.x + 2 * padX, y + t.y + 2 * padY), U(kRaised), Px(3));
 				Put(ImVec2(x + padX, y + padY), F->text, szSmall, U(kText), FLT_MAX, chip);
 				const std::string origin = OriginLabel(a_slot.origin);
-				float             ox = x + t.x + 2 * padX + Px(8);
+				float             ox = x + t.x + 2 * padX + Px(8), originH = 0;
 				if (!origin.empty() && ox < x + textW - Px(30))
-					Put(ImVec2(ox, y + padY), F->text, szSmall, U(kMuted), x + textW - ox, origin);
-				chipH = t.y + 2 * padY;
+					originH = Put(ImVec2(ox, y + padY), F->text, szSmall, U(kMuted), x + textW - ox, origin);  // a long archive + mod name wraps: the row grows to hold it
+				chipH = std::max(t.y + 2 * padY, padY + originH);
 			} else {
 				const std::string origin = OriginLabel(a_slot.origin);
 				if (!origin.empty())
@@ -901,6 +901,10 @@ namespace ti::card
 		{
 			for (const auto& t : a_shape.textures)
 				TextureRow(t, a_sub);
+			if (const auto source = PartSourceFacts(a_shape); !source.empty()) {
+				SubHeading("Mesh file");
+				Rows(source);
+			}
 			const auto facts = ShaderFacts(a_shape);
 			if (!facts.empty()) {
 				SubHeading("Shader and material");

@@ -232,6 +232,13 @@ namespace ti
 		case 59: return "shield";
 		case 60: return "Pip-Boy";
 		case 61: return "FX";
+		// the weapon slots of the biped (index 32 and up): the weapon in hand, then the holstered ones
+		case 62: return "weapon in hand";
+		case 63: case 64: case 65: case 66: case 67: case 68: case 69: return "holstered weapon";
+		case 70: return "quiver";
+		case 71: return "holstered gun";
+		case 72: return "grenade";
+		case 73: return "mine";
 		default: return std::format("slot {}", a_slot);
 		}
 	}

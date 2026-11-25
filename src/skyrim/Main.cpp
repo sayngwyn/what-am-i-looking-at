@@ -23,7 +23,7 @@
 
 namespace
 {
-	constexpr auto kPluginName = "What Am I Looking At 1.0.0"sv;
+	constexpr auto kPluginName = "What Am I Looking At 1.1.0"sv;
 
 	ti::Config       g_config;
 	std::uint64_t    g_counter = 0;

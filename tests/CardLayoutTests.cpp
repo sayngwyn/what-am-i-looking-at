@@ -4,9 +4,11 @@
 // Offline tests for the card's text helpers (CardLayout.cpp). No framework: each CHECK prints on failure and the exit
 // code is the failure count.
 #include "CardLayout.h"
+#include "PartSource.h"
 
 #include <cstdio>
 #include <string>
+#include <vector>
 
 using namespace ti;
 
@@ -272,8 +274,83 @@ static void TestConsoleBrief()
 	CHECK_EQ(ConsoleBrief(none, "x.json"), "[What Am I Looking At] #8 could not build the crosshair ray - full report in x.json");
 }
 
+// ---- which mesh file a part comes from ------------------------------------------------------------------------------------
+
+static MeshSource MakeSource(const char* a_path, const char* a_owner, bool a_isMod, std::vector<std::string> a_names, const char* a_originMod = "")
+{
+	MeshSource s;
+	s.path = a_path;
+	s.owner = a_owner;
+	s.isMod = a_isMod;
+	s.origin.looked = true;
+	s.origin.source = a_originMod[0] ? "loose" : "archive";
+	s.origin.archive = a_originMod[0] ? "" : "Fallout4 - Meshes.ba2";
+	s.origin.mod = a_originMod;
+	SetMeshNames(s, a_names);
+	return s;
+}
+
+static ShapeInfo Shape(int a_index, const char* a_name)
+{
+	ShapeInfo s;
+	s.index = a_index;
+	s.name = a_name;
+	return s;
+}
+
+static void TestPartSource()
+{
+	const std::vector<MeshSource> sources = {
+		MakeSource("meshes\\weapons\\10mmpistol\\10mmpistol.nif", "10mm Pistol (Fallout4.esm)", false, { "WEAPON", "10mmPistol:0", "Glass1:0", "" }),
+		MakeSource("meshes\\weapons\\10mmpistol\\10mmnightsights.nif", "Night Sights (Fallout4.esm)", true, { "NightSights001", "NightSights001:0", "Glass1:0" }),
+		MakeSource("meshes\\weapons\\10mmpistol\\10mmreflexsight.nif", "Reflex Sight (MyMod.esp)", true, { "10mmReflex:0", "TritiumDot021:0" }, "My Sights Mod"),
+	};
+	std::vector<ShapeInfo> shapes = { Shape(0, "10mmpistol:0"), Shape(1, "nightsights001:0"), Shape(2, "TritiumDot021:0"), Shape(3, "Glass1:0"), Shape(4, "Unknown:0"), Shape(5, "") };
+	AttributeParts(shapes, sources);
+
+	// a part named in exactly one file: that file, its origin and what brings it
+	CHECK_EQ(shapes[0].sourceMesh, "meshes\\weapons\\10mmpistol\\10mmpistol.nif");
+	CHECK(!shapes[0].sourceIsMod);
+	CHECK_EQ(shapes[0].sourceOwner, "10mm Pistol (Fallout4.esm)");
+	CHECK_EQ(shapes[1].sourceMesh, "meshes\\weapons\\10mmpistol\\10mmnightsights.nif");
+	CHECK(shapes[1].sourceIsMod);
+	CHECK_EQ(OriginLabel(shapes[1].sourceOrigin), "Fallout4 - Meshes.ba2");
+	CHECK_EQ(shapes[2].sourceMesh, "meshes\\weapons\\10mmpistol\\10mmreflexsight.nif");
+	CHECK_EQ(OriginLabel(shapes[2].sourceOrigin), "My Sights Mod");
+	// a name two files hold: no pick, both listed
+	CHECK(shapes[3].sourceMesh.empty());
+	CHECK(shapes[3].sourceChoices.size() == 2);
+	// a name no file holds, and a part without a name: nothing
+	CHECK(shapes[4].sourceMesh.empty() && shapes[4].sourceChoices.empty());
+	CHECK(shapes[5].sourceMesh.empty() && shapes[5].sourceChoices.empty());
+	// the same file twice (the base model and a mod that both point at it) is one file
+	std::vector<MeshSource> twice = { sources[1], sources[1] };
+	std::vector<ShapeInfo>  one = { Shape(0, "NightSights001:0") };
+	AttributeParts(one, twice);
+	CHECK_EQ(one[0].sourceMesh, "meshes\\weapons\\10mmpistol\\10mmnightsights.nif");
+	// no sources at all: nothing, and an earlier answer is cleared
+	AttributeParts(one, {});
+	CHECK(one[0].sourceMesh.empty() && one[0].sourceOwner.empty());
+
+	// the card rows
+	auto rows = PartSourceFacts(shapes[1]);
+	CHECK(rows.size() == 3);
+	CHECK(rows.size() == 3 && rows[0].label == "Part file" && rows[0].value == "meshes\\weapons\\10mmpistol\\10mmnightsights.nif");
+	CHECK(rows.size() == 3 && rows[1].label == "Part file from" && rows[1].value == "Fallout4 - Meshes.ba2");
+	CHECK(rows.size() == 3 && rows[2].label == "Added by mod" && rows[2].value == "Night Sights (Fallout4.esm)");
+	rows = PartSourceFacts(shapes[0]);
+	CHECK(rows.size() == 3 && rows[2].label == "Part of");
+	rows = PartSourceFacts(shapes[2]);
+	CHECK(rows.size() == 3 && rows[1].value == "My Sights Mod");
+	rows = PartSourceFacts(shapes[3]);
+	CHECK(rows.size() == 1 && rows[0].label == "Part file");
+	CHECK(rows.size() == 1 && rows[0].value == "one of meshes\\weapons\\10mmpistol\\10mmpistol.nif, meshes\\weapons\\10mmpistol\\10mmnightsights.nif");
+	CHECK(PartSourceFacts(shapes[4]).empty());
+}
+
 int main()
 {
+	TestPartSource();
 	TestConsoleBrief();
 	TestSizeChip();
 	TestOrigin();

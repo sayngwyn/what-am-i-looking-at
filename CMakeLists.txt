@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(WhatAmILookingAt VERSION 1.0.0 LANGUAGES CXX)
+project(WhatAmILookingAt VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,8 +28,10 @@ set(TI_CORE_SOURCES
     src/core/Diagnostics.cpp
     src/core/Fo4Names.cpp
     src/core/IniRead.cpp
+    src/core/NifStrings.cpp
     src/core/Output.cpp
     src/core/Overlay.cpp
+    src/core/PartSource.cpp
     src/core/PickScan.cpp
     src/core/Report.cpp
 )
@@ -51,7 +53,7 @@ if(TI_BUILD_TESTS)
     endif()
     add_test(NAME ReportTests COMMAND ReportTests)
 
-    add_executable(Ba2Tests tests/Ba2Tests.cpp src/core/Ba2.cpp src/core/Inflate.cpp)
+    add_executable(Ba2Tests tests/Ba2Tests.cpp src/core/Ba2.cpp src/core/Inflate.cpp src/core/NifStrings.cpp)
     target_include_directories(Ba2Tests PRIVATE src/core tests)
     if(MSVC)
         target_compile_options(Ba2Tests PRIVATE /W4 /WX /permissive-)
@@ -72,7 +74,7 @@ if(TI_BUILD_TESTS)
     endif()
     add_test(NAME ConfigTests COMMAND ConfigTests)
 
-    add_executable(CardLayoutTests tests/CardLayoutTests.cpp src/core/CardLayout.cpp)
+    add_executable(CardLayoutTests tests/CardLayoutTests.cpp src/core/CardLayout.cpp src/core/PartSource.cpp)
     target_include_directories(CardLayoutTests PRIVATE src/core tests)
     if(MSVC)
         target_compile_options(CardLayoutTests PRIVATE /W4 /WX /permissive-)

@@ -8,6 +8,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace ti
 {
@@ -26,6 +27,13 @@ namespace ti
 
 	/** Where a file came from, short: "loose", "Mod name" (a loose file the OS placed in a mod folder), "Skyrim - Textures0.bsa", "not found". Empty when not looked up. */
 	std::string OriginLabel(const FileOrigin& a_origin);
+
+	/**
+	 * The rows that say which mesh file a part comes from (Fallout 4 objects with modifications): "Part file", "Part file from" (the
+	 * file's origin), and "Added by mod" or "Part of" (the modification or item that brings the file). A part whose name several
+	 * files hold gets one "Part file" row naming them. Empty when nothing was worked out for the part.
+	 */
+	std::vector<Fact> PartSourceFacts(const ShapeInfo& a_shape);
 
 	/** "2 of 5" for the step control (a_index is zero-based); "2 of 5 \xC2\xB7 behind" for a hit past the first one along the ray. */
 	std::string StepLabel(int a_index, int a_count);

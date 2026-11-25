@@ -8,6 +8,7 @@
 
 #include <Windows.h>
 #include <d3d11.h>
+#include <fstream>
 #include <mutex>
 #include <atomic>
 #include <thread>
@@ -147,7 +148,7 @@ namespace ti
 				std::vector<std::filesystem::path> found;
 				for (const auto& entry : std::filesystem::directory_iterator(DataDir())) {
 					std::error_code ec;
-					if (entry.is_regular_file(ec) && entry.path().extension() == L".ba2")
+					if (entry.is_regular_file(ec) && _wcsicmp(entry.path().extension().c_str(), L".ba2") == 0)  // any case: mods ship ".BA2" too
 						found.push_back(entry.path());
 				}
 				// The engine loads an archive when a loaded plugin owns it ("<plugin>.ba2", "<plugin> - <anything>.ba2"); archives of
@@ -267,6 +268,53 @@ namespace ti
 		} catch (...) {
 			if (a_why)
 				*a_why = "archive read failed";
+		}
+		return {};
+	}
+
+	std::vector<std::uint8_t> ReadDataFile(std::string_view a_dataPath, std::size_t a_maxBytes, std::string* a_why, bool* a_pending)
+	{
+		const auto fail = [&](const char* a_text) {
+			if (a_why)
+				*a_why = a_text;
+			return std::vector<std::uint8_t>();
+		};
+		try {
+			const std::string path = Ba2NormalisedPath(a_dataPath);
+			if (path.empty())
+				return fail("no path");
+			// a loose file wins over every archive
+			std::error_code    ec;
+			const std::wstring full = DataDir() + L"\\" + std::filesystem::path(path).wstring();
+			if (std::filesystem::is_regular_file(full, ec)) {
+				const auto size = std::filesystem::file_size(full, ec);
+				if (ec || size == 0 || size > a_maxBytes)
+					return fail("the loose file is empty or larger than the limit");
+				std::ifstream in(std::filesystem::path(full), std::ios::binary);
+				std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
+				in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+				if (!in)
+					return fail("the loose file cannot be read");
+				return bytes;
+			}
+			if (!g_indexReady) {
+				StartIndex();
+				if (a_pending)
+					*a_pending = true;
+				return fail("the archive index is still being built");
+			}
+			auto& archives = Archives();
+			for (auto it = archives.rbegin(); it != archives.rend(); ++it) {  // the last loaded archive wins
+				if (const auto* entry = it->index.Find(path))
+					return it->index.ReadFile(*entry, a_maxBytes, a_why);
+			}
+			return fail("in no loaded archive");
+		} catch (const std::exception& e) {
+			if (a_why)
+				*a_why = std::string("file read failed: ") + e.what();
+		} catch (...) {
+			if (a_why)
+				*a_why = "file read failed";
 		}
 		return {};
 	}

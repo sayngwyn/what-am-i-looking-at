@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+
+Fallout 4 gets the source of each part. Both games get two fixes.
+
+- Fallout 4: each part now shows the mesh file it comes from, where that file lives (an archive or a mod folder) and which mod adds it.
+- Fallout 4: weapon mods are listed with the plugin that adds them, and a plugin that changes a weapon mod is named too.
+- Fixed: mod archives with upper-case .BA2 or .BSA names are now read, on both games.
+- Fixed: long archive and mod names no longer run into the next texture row.
+
 ## 1.0.0
 
 First release, for Skyrim SE/AE and Fallout 4.

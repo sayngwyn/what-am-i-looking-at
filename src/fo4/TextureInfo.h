@@ -35,4 +35,11 @@ namespace ti
 	 * is that the archive index is still being built (it never waits for it).
 	 */
 	std::vector<std::uint8_t> ReadArchiveTexture(std::string_view a_dataPath, int a_maxSide, std::string* a_why, bool* a_pending);
+
+	/**
+	 * The bytes of the file at a_dataPath (Data-relative) as the game would load it: the loose file when there is one, else the
+	 * winning loaded BA2's copy; at most a_maxBytes. Empty with a_why when there is none or it is too large; a_pending is set when
+	 * the only reason is that the archive index is still being built (it never waits for it).
+	 */
+	std::vector<std::uint8_t> ReadDataFile(std::string_view a_dataPath, std::size_t a_maxBytes, std::string* a_why, bool* a_pending);
 }

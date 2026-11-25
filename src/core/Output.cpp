@@ -959,6 +959,20 @@ namespace ti
 				j.EndObject();
 			}
 
+			if (!s.sourceMesh.empty() || !s.sourceChoices.empty()) {
+				j.BeginObject("source_mesh");
+				j.Str("path", s.sourceMesh);
+				if (!s.sourceMesh.empty()) {
+					j.Str("brought_by", s.sourceOwner);
+					j.Bool("is_modification", s.sourceIsMod);
+					if (s.sourceOrigin.looked)
+						WriteOrigin(j, "origin", s.sourceOrigin);
+				} else {
+					j.Strings("named_in_files", s.sourceChoices);
+				}
+				j.EndObject();
+			}
+
 			j.BeginObject("alpha");
 			j.Str("mode", s.alphaMode);
 			if (s.alphaThreshold >= 0) {

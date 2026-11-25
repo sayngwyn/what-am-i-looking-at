@@ -14,6 +14,7 @@ Open the console and click anything in Skyrim or Fallout 4 to see exactly which 
 - **Click to look.** With the console open (the `~` key), left-click an object, bare ground, water or the sky. The card appears and names what you picked.
 - **The exact part, not just the model.** A building is dozens of parts. The card marks the one you clicked and shows its textures as thumbnails, with each file's name, size, mip count and the archive it came from.
 - **Shader and material.** The shader, flags, glossiness, vertex data and mesh size (and on Fallout 4 the material file).
+- **Where it comes from (Fallout 4).** Each part shows its mesh file, where that file lives (an archive or a mod folder) and which mod adds it. Weapon mods show the plugin that adds them, and any plugin that changes them.
 - **Step through what is there.** The arrows in the card's header move to the next thing along the same line of sight: the parts behind, then the ground under it. Typing `lookingat next` does the same.
 - **Characters too.** Click a person or creature to see its skin and armor parts the same way.
 

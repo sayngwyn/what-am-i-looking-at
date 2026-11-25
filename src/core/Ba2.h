@@ -33,6 +33,7 @@ namespace ti
 		std::uint8_t  chunks = 0;         ///< textures: number of data chunks; 1 for a general file
 		bool          cubemap = false;
 		std::uint32_t chunkFirst = 0;     ///< textures: where this entry's chunks start in the index's chunk list
+		std::uint64_t dataOffset = 0;     ///< general files: where the stored bytes start in the archive
 	};
 
 	/** One stored piece of a texture: some mip levels, zlib-packed (packed > 0) or raw (packed == 0). */
@@ -72,6 +73,12 @@ namespace ti
 		 * a_why filled in when the entry is not a plain 2D texture in a format this knows, or the file cannot be read.
 		 */
 		std::vector<std::uint8_t> ReadSmallDds(const Ba2Entry& a_entry, int a_maxSide, std::string* a_why = nullptr) const;
+
+		/**
+		 * The whole file of a general entry (a mesh, a material), unpacked. Empty with a_why filled in when the entry is a texture, is
+		 * larger than a_maxBytes, or cannot be read. The archive is opened, read and closed again.
+		 */
+		std::vector<std::uint8_t> ReadFile(const Ba2Entry& a_entry, std::size_t a_maxBytes, std::string* a_why = nullptr) const;
 
 		/** Every path (normalised), in archive order; empty unless Open was asked to keep names. */
 		const std::vector<std::string>& Names() const { return names_; }

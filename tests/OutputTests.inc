@@ -151,7 +151,7 @@ static PickInfo MakeSample()
 	p.timestamp = "2026-11-14T22:40:05";
 	p.unixMs = 1700000000000;
 	p.trigger = "console_click";
-	p.plugin = "What Am I Looking At 1.0.0";
+	p.plugin = "What Am I Looking At 1.1.0";
 	p.valid = true;
 	p.object = { "Farmhouse06", 0x000A1B2C, 0x0001234F, "STAT", "Farmhouse06", "", "Architecture\\Whiterun\\WRFarmhouse06.nif", "Farmhouse06" };
 	p.shapes.push_back(MakeShape(0, "WoodWall01:0", "textures\\architecture\\whiterun\\wrwoodwall01.dds", "textures\\architecture\\whiterun\\wrwoodwall01_n.dds"));

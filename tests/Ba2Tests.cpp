@@ -9,6 +9,7 @@
 // variables TI_FO4_OG_DATA and TI_FO4_AE_DATA, and without those the real-archive part is skipped.
 #include "Ba2.h"
 #include "Inflate.h"
+#include "NifStrings.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -448,6 +449,138 @@ static void TestReal(const fs::path& a_og, const fs::path& a_ae)
 	}
 }
 
+// ---- NIF header strings -------------------------------------------------------------------------------------------------
+
+namespace
+{
+	void PutShort(std::vector<unsigned char>& a_out, const char* a_text)
+	{
+		a_out.push_back(static_cast<unsigned char>(std::strlen(a_text) + 1));
+		for (const char* c = a_text; *c; ++c)
+			a_out.push_back(static_cast<unsigned char>(*c));
+		a_out.push_back(0);
+	}
+
+	void PutSized(std::vector<unsigned char>& a_out, const char* a_text)
+	{
+		Put<std::uint32_t>(a_out, static_cast<std::uint32_t>(std::strlen(a_text)));
+		for (const char* c = a_text; *c; ++c)
+			a_out.push_back(static_cast<unsigned char>(*c));
+	}
+
+	/** A Fallout 4 style NIF header with the given Bethesda version, block count and strings; no block data follows. */
+	std::vector<unsigned char> MakeNifHeader(const std::vector<const char*>& a_strings, std::uint32_t a_bsVersion = 130, std::uint32_t a_blocks = 3)
+	{
+		std::vector<unsigned char> out;
+		const char                 line[] = "Gamebryo File Format, Version 20.2.0.7\n";
+		out.insert(out.end(), line, line + sizeof(line) - 1);
+		Put<std::uint32_t>(out, 0x14020007);
+		out.push_back(1);
+		Put<std::uint32_t>(out, 12);
+		Put<std::uint32_t>(out, a_blocks);
+		Put<std::uint32_t>(out, a_bsVersion);
+		PutShort(out, "author");
+		if (a_bsVersion > 130)
+			Put<std::uint32_t>(out, 0);
+		if (a_bsVersion < 131)
+			PutShort(out, "");
+		PutShort(out, "export");
+		PutShort(out, "g:\\scratch\\x.hkt");
+		Put<std::uint16_t>(out, 2);
+		PutSized(out, "NiNode");
+		PutSized(out, "BSTriShape");
+		for (std::uint32_t i = 0; i < a_blocks; ++i)
+			Put<std::uint16_t>(out, static_cast<std::uint16_t>(i % 2));
+		for (std::uint32_t i = 0; i < a_blocks; ++i)
+			Put<std::uint32_t>(out, 100 + i);
+		Put<std::uint32_t>(out, static_cast<std::uint32_t>(a_strings.size()));
+		Put<std::uint32_t>(out, 20);
+		for (const char* t : a_strings)
+			PutSized(out, t);
+		Put<std::uint32_t>(out, 0);  // groups
+		return out;
+	}
+}
+
+static void TestNifStrings()
+{
+	std::vector<std::string> strings;
+	auto                     bytes = MakeNifHeader({ "NightSights001", "CPT", "TritiumDot008:0", "", "NightSights001:0" });
+	CHECK(NifHeaderStrings(bytes.data(), bytes.size(), strings));
+	CHECK(strings.size() == 5);
+	CHECK(strings.size() == 5 && strings[0] == "NightSights001" && strings[3].empty() && strings[4] == "NightSights001:0");
+	CHECK(NifHasString(strings, "nightsights001:0"));
+	CHECK(NifHasString(strings, "NIGHTSIGHTS001"));
+	CHECK(!NifHasString(strings, "NightSights"));
+	CHECK(!NifHasString(strings, "nightsight:0"));
+
+	// the other Bethesda header shapes: 131 has no process script, above 130 a further word
+	bytes = MakeNifHeader({ "A", "B" }, 131);
+	CHECK(NifHeaderStrings(bytes.data(), bytes.size(), strings) && strings.size() == 2);
+	bytes = MakeNifHeader({ "A", "B", "C" }, 155);
+	CHECK(NifHeaderStrings(bytes.data(), bytes.size(), strings) && strings.size() == 3);
+
+	// no strings at all is a good header with an empty table
+	bytes = MakeNifHeader({});
+	CHECK(NifHeaderStrings(bytes.data(), bytes.size(), strings) && strings.empty());
+
+	// damaged: cut off anywhere inside the string table (never reads past the end, never claims success), a wrong signature, a wrong version
+	bytes = MakeNifHeader({ "NightSights001", "CPT", "TritiumDot008:0" });
+	const std::size_t tableEnd = bytes.size() - 4;  // the groups count follows the table
+	bool              cutFailed = true;
+	for (std::size_t n = 0; n < tableEnd; ++n) {
+		std::vector<std::string> out;
+		if (NifHeaderStrings(bytes.data(), n, out) || !out.empty())
+			cutFailed = false;
+	}
+	CHECK(cutFailed);
+	CHECK(NifHeaderStrings(bytes.data(), tableEnd, strings) && strings.size() == 3);
+	auto wrong = bytes;
+	wrong[0] = 'X';
+	CHECK(!NifHeaderStrings(wrong.data(), wrong.size(), strings) && strings.empty());
+	wrong = bytes;
+	wrong[39] = 0x00;  // the first byte of the version word
+	CHECK(!NifHeaderStrings(wrong.data(), wrong.size(), strings));
+	CHECK(!NifHeaderStrings(nullptr, 0, strings));
+}
+
+static void TestRealNif(const fs::path& a_og)
+{
+	std::error_code ec;
+	if (!fs::is_directory(a_og, ec))
+		return;  // TestReal already counted the skip
+	auto meshes = Ba2Index::Open(a_og / "Fallout4 - Meshes.ba2");
+	CHECK(meshes.has_value());
+	if (!meshes)
+		return;
+	const auto* entry = meshes->Find("Meshes\\Weapons\\10mmPistol\\10mmNightSights.nif");
+	CHECK(entry != nullptr);
+	if (!entry)
+		return;
+	std::string why;
+	auto        file = meshes->ReadFile(*entry, 8u * 1024 * 1024, &why);
+	CHECK(!file.empty());
+	CHECK(file.size() == entry->unpackedSize);
+	std::vector<std::string> strings;
+	CHECK(NifHeaderStrings(file.data(), file.size(), strings));
+	CHECK(NifHasString(strings, "NightSights001:0"));
+	CHECK(NifHasString(strings, "TritiumDot008:0"));
+	CHECK(!NifHasString(strings, "10mmReflex:0"));
+	// the reflex sight of the same weapon is another file with other part names
+	const auto* reflex = meshes->Find("meshes/weapons/10mmpistol/10mmreflexsight.nif");
+	CHECK(reflex != nullptr);
+	if (reflex) {
+		auto other = meshes->ReadFile(*reflex, 8u * 1024 * 1024);
+		CHECK(NifHeaderStrings(other.data(), other.size(), strings));
+		CHECK(NifHasString(strings, "10mmReflex:0"));
+		CHECK(!NifHasString(strings, "NightSights001:0"));
+	}
+	// a size limit is refused with a reason
+	why.clear();
+	CHECK(meshes->ReadFile(*entry, 100, &why).empty());
+	CHECK(!why.empty());
+}
+
 int main(int argc, char** argv)
 {
 	const auto envPath = [](const char* name) {
@@ -472,6 +605,8 @@ int main(int argc, char** argv)
 	TestOwnership();
 	TestSynthetic(dir);
 	TestReal(og, ae);
+	TestNifStrings();
+	TestRealNif(og);
 
 	fs::remove_all(dir, ec);
 	std::printf("%d check(s), %d failure(s), %d part(s) skipped\n", g_checks, g_failures, g_skipped);

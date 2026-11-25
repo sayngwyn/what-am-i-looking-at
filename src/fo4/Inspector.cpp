@@ -504,7 +504,8 @@ namespace ti
 					(model = ModelAs<RE::TESObjectLIGH>(a_base)) || (model = ModelAs<RE::TESObjectBOOK>(a_base)) ||  //
 					(model = ModelAs<RE::TESFlora>(a_base)) || (model = ModelAs<RE::TESObjectTREE>(a_base)) ||       //
 					(model = ModelAs<RE::BGSMovableStatic>(a_base)) || (model = ModelAs<RE::TESAmmo>(a_base)) ||     //
-					(model = ModelAs<RE::AlchemyItem>(a_base)) || (model = ModelAs<RE::BGSNote>(a_base)));
+					(model = ModelAs<RE::AlchemyItem>(a_base)) || (model = ModelAs<RE::BGSNote>(a_base)) ||
+						(model = ModelAs<RE::TESObjectWEAP>(a_base)));
 				if (model)
 					return Safe(model->GetModel());
 			} catch (...) {
