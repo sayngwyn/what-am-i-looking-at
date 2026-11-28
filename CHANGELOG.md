@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1
+
+- Skyrim, fixed: the card now shows with Community Shaders' HDR (and frame generation); it was drawn but covered up.
+- The license and notes now sit inside the mod's own folder, so they no longer clash with other mods' files (seen with Faster HDT-SMP).
+- Installed by hand over an earlier version? The old LICENSE, SOURCE.txt and THIRD-PARTY-NOTICES.txt in your Data folder can go if they came from this mod; other mods use the same names, so check first. Mod managers handle this for you.
+
 ## 1.1.0
 
 Fallout 4 gets the source of each part. Both games get two fixes.

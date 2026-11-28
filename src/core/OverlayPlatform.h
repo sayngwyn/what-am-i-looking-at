@@ -12,6 +12,7 @@
 #include <string>
 
 struct IDXGISwapChain;
+struct ID3D11RenderTargetView;
 
 namespace ti::overlay::platform
 {
@@ -26,6 +27,14 @@ namespace ti::overlay::platform
 
 	/** One line into the in-game console. */
 	void ConsolePrint(const std::string& a_line);
+
+	/**
+	 * The render target view the game's own UI is drawn into this frame, or null when there is no such target and the swap chain's back
+	 * buffer should be used. In an unmodified game it is the back buffer itself; a mod that composes the final image itself (Community
+	 * Shaders' HDR and frame generation) redirects the game's UI to a buffer of its own and copies the back buffer over at Present, so a
+	 * card drawn into the back buffer is covered up. Not add-ref'd: valid only for the current frame, on the render thread.
+	 */
+	ID3D11RenderTargetView* UiRenderTarget();
 
 	/** The folder holding the card's fonts (absolute, from the game folder). */
 	std::filesystem::path FontFolder();

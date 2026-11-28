@@ -3,8 +3,9 @@
     python tools/package_release.py
 
 Reads the version from CMakeLists.txt and writes dist/release/WhatAmILookingAt-<version>-Skyrim.zip and
-WhatAmILookingAt-<version>-FO4.zip. Each zip holds the mod folder (SKSE or F4SE), LICENSE, THIRD-PARTY-NOTICES.txt and SOURCE.txt;
-the font's OFL.txt is already beside the font in the mod folder. The zips are deterministic (sorted names, fixed times) and are
+WhatAmILookingAt-<version>-FO4.zip. Each zip holds the mod folder (SKSE or F4SE) and nothing else at its root: LICENSE,
+THIRD-PARTY-NOTICES.txt and SOURCE.txt sit inside the mod's own folder (<loader>/Plugins/WhatAmILookingAt/), so they cannot clash with
+another mod's files of the same name; the font's OFL.txt is already beside the font there. The zips are deterministic (sorted names, fixed times) and are
 scanned before they are kept: a drive-letter path, a user-profile path or an email address in any file refuses the package.
 """
 
@@ -51,9 +52,10 @@ def main() -> int:
         for f in sorted(base.rglob("*")):
             if f.is_file():
                 entries[f.relative_to(base).as_posix()] = f.read_bytes()
-        entries["LICENSE"] = (ROOT / "LICENSE").read_bytes()
-        entries["THIRD-PARTY-NOTICES.txt"] = (ROOT / "THIRD-PARTY-NOTICES.txt").read_bytes()
-        entries["SOURCE.txt"] = SOURCE.format(version=ver, game=game, url=REPO_URL).replace("\n", "\r\n").encode("utf-8")
+        own = f"{loader}/Plugins/WhatAmILookingAt"
+        entries[f"{own}/LICENSE"] = (ROOT / "LICENSE").read_bytes()
+        entries[f"{own}/THIRD-PARTY-NOTICES.txt"] = (ROOT / "THIRD-PARTY-NOTICES.txt").read_bytes()
+        entries[f"{own}/SOURCE.txt"] = SOURCE.format(version=ver, game=game, url=REPO_URL).replace("\n", "\r\n").encode("utf-8")
         if f"{loader}/Plugins/WhatAmILookingAt/fonts/OFL.txt" not in entries:
             sys.exit("OFL.txt is missing beside the font")
         bad = {name: m.group()[:60] for name, data in entries.items() if not name.endswith(".ttf") for m in [REFUSE.search(data)] if m}

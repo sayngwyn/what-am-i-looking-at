@@ -334,6 +334,12 @@ namespace ti::overlay::platform
 		}
 	}
 
+	ID3D11RenderTargetView* UiRenderTarget()
+	{
+		// Fallout 4 keeps its old behavior: the card is drawn into the swap chain's back buffer (null here means exactly that).
+		return nullptr;
+	}
+
 	std::filesystem::path FontFolder()
 	{
 		wchar_t    buffer[MAX_PATH]{};

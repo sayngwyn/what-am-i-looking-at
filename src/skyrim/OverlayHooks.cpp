@@ -10,6 +10,7 @@
 #include "Overlay.h"
 #include "OverlayPlatform.h"
 
+#include <d3d11.h>
 #include <dxgi.h>
 
 #include <atomic>
@@ -187,6 +188,16 @@ namespace ti::overlay
 		{
 			if (auto* log = RE::ConsoleLog::GetSingleton())
 				log->Print("%s", a_line.c_str());
+		}
+
+		ID3D11RenderTargetView* UiRenderTarget()
+		{
+			// The renderer's framebuffer target: the back buffer in an unmodified game; where Community Shaders' HDR or frame generation is on,
+			// that target is pointed at the buffer CS composes over the back buffer at Present, so the card goes where the game's own UI goes.
+			auto* renderer = RE::BSGraphics::Renderer::GetSingleton();
+			if (!renderer)
+				return nullptr;
+			return reinterpret_cast<ID3D11RenderTargetView*>(renderer->GetRuntimeData().renderTargets[RE::RENDER_TARGET::kFRAMEBUFFER].RTV);
 		}
 
 		std::filesystem::path FontFolder()

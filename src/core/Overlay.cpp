@@ -212,7 +212,9 @@ namespace ti::overlay
 			}
 			D3D11_BLEND_DESC blend{};
 			blend.RenderTarget[0].BlendEnable = FALSE;
-			blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+			// Color only: the card's opaque background keeps its alpha under a thumbnail. Community Shaders' HDR and frame generation
+			// lay the UI target over the scene by its alpha, so a thumbnail's own alpha (often 0) would otherwise punch a hole in the card.
+			blend.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_RED | D3D11_COLOR_WRITE_ENABLE_GREEN | D3D11_COLOR_WRITE_ENABLE_BLUE;
 			g_device->CreateBlendState(&blend, &g_noBlend);
 			g_lastFrame = std::chrono::steady_clock::now();
 			g_ready = true;
@@ -319,6 +321,73 @@ namespace ti::overlay
 			}
 		}
 
+		/**
+		 * What the card is drawn into: the render target the game draws its own UI into (platform::UiRenderTarget), else the swap chain's
+		 * back buffer. In an unmodified game the two are the same texture. Where Community Shaders' HDR or frame generation is on, the game's
+		 * UI goes to a buffer of CS's own that it composes over the back buffer at Present, so only a card drawn there survives.
+		 * Returns an add-ref'd view (the caller releases it) and the size and format of its texture in a_desc; null when none could be made.
+		 * Logs which one is used whenever it changes (once in a normal session).
+		 */
+		ID3D11RenderTargetView* AcquireTarget(ID3D11Texture2D* a_back, D3D11_TEXTURE2D_DESC& a_desc)
+		{
+			D3D11_TEXTURE2D_DESC backDesc{};
+			a_back->GetDesc(&backDesc);
+			a_desc = backDesc;
+			ID3D11RenderTargetView* rtv = nullptr;
+			bool                    ui = false;
+			const char*             skipped = nullptr;
+			if (auto* uiRtv = platform::UiRenderTarget()) {
+				ID3D11Device* owner = nullptr;
+				uiRtv->GetDevice(&owner);
+				const bool sameDevice = owner == g_device;
+				if (owner)
+					owner->Release();
+				ID3D11Resource* resource = nullptr;
+				uiRtv->GetResource(&resource);
+				ID3D11Texture2D* texture = nullptr;
+				if (!sameDevice) {
+					skipped = "the game's UI target belongs to another device";
+				} else if (resource && SUCCEEDED(resource->QueryInterface(__uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&texture))) && texture) {
+					D3D11_TEXTURE2D_DESC uiDesc{};
+					texture->GetDesc(&uiDesc);
+					if (uiDesc.Width > 0 && uiDesc.Height > 0 && uiDesc.SampleDesc.Count == 1) {
+						a_desc = uiDesc;
+						rtv = uiRtv;
+						rtv->AddRef();
+						ui = true;
+					} else {
+						skipped = "the game's UI target is empty or multisampled";
+					}
+					texture->Release();
+				} else {
+					skipped = "the game's UI target is not a 2D texture";
+				}
+				if (resource)
+					resource->Release();
+			}
+			if (!rtv && FAILED(g_device->CreateRenderTargetView(a_back, nullptr, &rtv)))
+				rtv = nullptr;
+
+			static int           lastKind = -1;  // 0 back buffer, 1 UI target
+			static std::uint32_t lastW = 0, lastH = 0, lastFormat = 0;
+			const int            kind = ui ? 1 : 0;
+			if (rtv && (kind != lastKind || a_desc.Width != lastW || a_desc.Height != lastH || static_cast<std::uint32_t>(a_desc.Format) != lastFormat)) {
+				lastKind = kind;
+				lastW = a_desc.Width;
+				lastH = a_desc.Height;
+				lastFormat = static_cast<std::uint32_t>(a_desc.Format);
+				if (ui) {
+					const bool same = a_desc.Width == backDesc.Width && a_desc.Height == backDesc.Height;
+					spdlog::info("card: drawing into the game's UI target ({}x{}, format {}){}", a_desc.Width, a_desc.Height, static_cast<int>(a_desc.Format),
+						same ? std::string() : std::format("; the swap chain back buffer is {}x{}, the card keeps its share of the screen", backDesc.Width, backDesc.Height));
+				} else {
+					spdlog::info("card: drawing into the swap chain back buffer ({}x{}, format {}){}", a_desc.Width, a_desc.Height, static_cast<int>(a_desc.Format),
+						skipped ? std::format("; {}", skipped) : std::string());
+				}
+			}
+			return rtv;
+		}
+
 		void OnFrame(IDXGISwapChain* a_swap)
 		{
 			std::shared_ptr<const PickInfo> info;
@@ -349,10 +418,9 @@ namespace ti::overlay
 				return;
 			const bool ready = EnsureInit(a_swap);
 			if (show && ready) {
-				D3D11_TEXTURE2D_DESC desc{};
-				back->GetDesc(&desc);
-				ID3D11RenderTargetView* rtv = nullptr;
-				if (SUCCEEDED(g_device->CreateRenderTargetView(back, nullptr, &rtv)) && rtv) {
+				D3D11_TEXTURE2D_DESC    desc{};
+				ID3D11RenderTargetView* rtv = AcquireTarget(back, desc);
+				if (rtv) {
 					std::scoped_lock lock(g_mutex);
 					const float w = static_cast<float>(desc.Width), h = static_cast<float>(desc.Height);
 					g_displayW = w;
